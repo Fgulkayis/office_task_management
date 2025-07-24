@@ -27,7 +27,8 @@
         <h1>Ofis Görev Yönetim Sistemi</h1>
         <div class="nav-links">
             <a href="{% url 'anasayfa' %}">Ana Sayfa</a>
-            <a href="{% url 'gorevler:gorev_listesi' %}">Görevlerim</a> <a href="#">Profilim</a>
+            <a href="{% url 'gorevler:gorev_listesi' %}">Görevlerim</a>
+            <a href="{% url 'kullanicilar:profilim' %}">Profilim</a>
             <form action="{% url 'kullanicilar:cikis' %}" method="post" style="display:inline;">
                 {% csrf_token %}
                 <button type="submit" style="background:none; border:none; color:white; font-weight:bold; cursor:pointer; font-size: 1em; padding: 0;">Çıkış Yap</button>
@@ -36,19 +37,27 @@
     </div>
     <div class="content">
         <h2>Atanan Görevlerim</h2>
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
         {% if gorevler %}
             <ul class="task-list">
                 {% for gorev in gorevler %}
                     <li class="task-item">
                         <div>
-                            <h3>{{ gorev.baslik }}</h3>
+                            
+                            <h3><a href="{% url 'gorevler:gorev_detay' pk=gorev.pk %}" style="text-decoration: none; color: inherit;">{{ gorev.baslik }}</a></h3>
                             <p>Açıklama: {{ gorev.aciklama|truncatechars:100 }}</p>
                             <p>Atayan Yetkili: {{ gorev.atan_yetkili.username|default:"Yok" }}</p>
                             <p>Oluşturulma Tarihi: {{ gorev.olusturma_tarihi|date:"d M Y H:i" }}</p>
-                            {% if gorev.tamamlanma_suresi %}
-                                <p>Tamamlanma Süresi: {{ gorev.tamamlanma_suresi }}</p>
+                            {% if gorev.son_teslim_tarihi %}
+                                <p>Son Teslim Tarihi: {{ gorev.son_teslim_tarihi|date:"d M Y" }}</p>
                             {% endif %}
-                            {% if gorev.puan %}
+                            {% if gorev.puan != None and gorev.durum == 'TMM' %}
                                 <p>Puan: {{ gorev.puan }} / 5</p>
                             {% endif %}
                         </div>

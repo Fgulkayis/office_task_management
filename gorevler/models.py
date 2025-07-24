@@ -27,10 +27,38 @@ class Gorev(models.Model):
 
 
     def __str__(self):
-       return f"{self.baslik} - {self.atanan_calisan.username} ({self.get_durum_display()})"
+       return f"{self.baslik}  ({self.atanan_calisan.username})"
 
     @property
     def tamamlanma_suresi(self):
-      if self.baslama_tarihi and self.tamamlanma_tarihi:
-         return self.tamamlanma_tarihi - self.baslama_tarihi
-      return None
+        if self.baslama_tarihi and self.tamamlanma_tarihi:
+            delta = self.tamamlanma_tarihi - self.baslama_tarihi
+            total_seconds = int(delta.total_seconds())
+
+            if total_seconds <= 0:
+                return "Hesaplanamadı"
+
+            days = total_seconds // 86400
+            total_seconds %= 86400
+            hours = total_seconds // 3600
+            total_seconds %= 3600
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+
+            parts = []
+            if days > 0:
+                parts.append(f"{days} gün")
+            if hours > 0:
+                parts.append(f"{hours} saat")
+            if minutes > 0:
+                parts.append(f"{minutes} dakika")
+            if seconds > 0 and not (days or hours or minutes): # 
+                parts.append(f"{seconds} saniye")
+
+            if not parts:
+                return "1 dakikadan az" if delta.total_seconds() > 0 else "Henüz tamamlanmadı"
+
+            return ", ".join(parts)
+        elif self.baslama_tarihi and not self.tamamlanma_tarihi:
+            return "Devam Ediyor"
+        return "Henüz Başlatılmadı" 
