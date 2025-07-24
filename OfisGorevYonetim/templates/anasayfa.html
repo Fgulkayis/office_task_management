@@ -17,9 +17,9 @@
     <div class="header">
         <h1>Ofis Görev Yönetim Sistemi</h1>
         <div class="nav-links">
-            <a href="/">Ana Sayfa</a>
-            <a href="#">Görevlerim</a>
-            <a href="#">Profilim</a>
+            <a href="{% url 'anasayfa' %}">Ana Sayfa</a>
+            <a href="{% url 'gorevler:gorev_listesi' %}">Görevlerim</a>
+            <a href="{% url 'kullanicilar:profilim' %}">Profilim</a>
             <form action="{% url 'kullanicilar:cikis' %}" method="post" style="display:inline;">
             {% csrf_token %} <button type="submit" style="background:none; border:none; color:white; font-weight:bold; cursor:pointer; font-size: 1em; padding: 0;">Çıkış Yap</button>
         </form> </div>

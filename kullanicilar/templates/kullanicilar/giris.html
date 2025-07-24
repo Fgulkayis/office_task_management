@@ -42,7 +42,7 @@
             <button type="submit">Giriş Yap</button>
             <input type="hidden" name="next" value="{{ next }}" />
         </form>
-        <p>Hesabınız yok mu? <a href="#">Şimdi kaydolun</a> (Henüz aktif değil)</p>
+        <p>Hesabınız yok mu? <a href="{% url "kullanicilar:kayit" %}">Şimdi Kaydolun</a></p>
     </div>
 </body>
 </html>
