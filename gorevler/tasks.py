@@ -1,120 +1,135 @@
-# gorevler/tasks.py
+import openpyxl
 from celery import shared_task
 from django.contrib.auth.models import User
 from gorevler.models import Gorev, GorevDurumu
-from django.utils import timezone
-import openpyxl
+from datetime import datetime
 import os
-import datetime 
+from django.db import transaction 
+from django.contrib.auth import get_user_model 
+
+User = get_user_model() 
 
 @shared_task
 def toplu_gorev_ata_excel(file_path, yetkili_user_id):
-    print(f"Celery görevi başlatıldı: {file_path}")
+    print(f"Celery görevi başlatıldı. Dosya yolu: {file_path}, Yetkili ID: {yetkili_user_id}")
+    
     try:
-        yetkili_user = User.objects.get(id=yetkili_user_id)
-    except User.DoesNotExist:
-        print(f"HATA: Yetkili kullanıcı bulunamadı: ID {yetkili_user_id}")
-        return False
-
-    try:
-        workbook = openpyxl.load_workbook(file_path)
-        sheet = workbook.active
-    except Exception as e:
-        print(f"HATA: Excel dosyası okunamadı veya bozuk: {e}")
-        return False
-
-
-    header_skipped = False
-    created_count = 0
-    failed_count = 0
-
-
-    COL_USERNAME = 0 
-    COL_BASLIK = 1    
-    COL_ACIKLAMA = 2  
-    COL_SON_TESLIM_TARIHI = 3 
-
-    for row_index, row in enumerate(sheet.iter_rows(min_row=1), start=1):
-        if not header_skipped: 
-            header_skipped = True
-            continue
-
-       
-        row_values = [cell.value for cell in row]
-
+        
         try:
-            
-            calisan_username = str(row_values[COL_USERNAME]).strip() if row_values[COL_USERNAME] else None
-            baslik = str(row_values[COL_BASLIK]).strip() if row_values[COL_BASLIK] else None
-            aciklama = str(row_values[COL_ACIKLAMA]).strip() if row_values[COL_ACIKLAMA] else None
-            son_teslim_tarihi_excel = row_values[COL_SON_TESLIM_TARIHI] 
-
-            if not (calisan_username and baslik and aciklama):
-                print(f"UYARI: Eksik bilgi içeren satır atlandı (Satır {row_index}): Çalışan: '{calisan_username}', Başlık: '{baslik}', Açıklama: '{aciklama}'")
-                failed_count += 1
-                continue
-
-          
-            try:
-                atanan_calisan = User.objects.get(username=calisan_username)
-            except User.DoesNotExist:
-                print(f"UYARI: Çalışan bulunamadı: '{calisan_username}' (Satır {row_index}). Bu görev atlanıyor.")
-                failed_count += 1
-                continue
-
-           
-            son_teslim_tarihi = None
-            if son_teslim_tarihi_excel:
-                try:
-                    if isinstance(son_teslim_tarihi_excel, (datetime.datetime, datetime.date)):
-                        son_teslim_tarihi = son_teslim_tarihi_excel.date()
-                    elif isinstance(son_teslim_tarihi_excel, (int, float)): 
-                        son_teslim_tarihi = openpyxl.utils.datetime.from_excel(son_teslim_tarihi_excel).date()
-                    elif isinstance(son_teslim_tarihi_excel, str):
-                       
-                        for fmt in ('%Y-%m-%d', '%d.%m.%Y', '%m/%d/%Y'):
-                            try:
-                                son_teslim_tarihi = datetime.datetime.strptime(son_teslim_tarihi_excel, fmt).date()
-                                break
-                            except ValueError:
-                                continue
-                        if not son_teslim_tarihi:
-                            print(f"UYARI: Geçersiz son teslim tarihi string formatı: '{son_teslim_tarihi_excel}' (Satır {row_index}). Tarih atlandı.")
-                    else:
-                        print(f"UYARI: Bilinmeyen son teslim tarihi tipi: {type(son_teslim_tarihi_excel)} değeri '{son_teslim_tarihi_excel}' (Satır {row_index}). Tarih atlandı.")
-                except Exception as date_e:
-                    print(f"UYARI: Son teslim tarihi dönüştürülürken hata oluştu: '{son_teslim_tarihi_excel}' (Satır {row_index}) - Hata: {date_e}. Tarih atlandı.")
-
-          
-            Gorev.objects.create(
-                baslik=baslik,
-                aciklama=aciklama,
-                atanan_calisan=atanan_calisan,
-                atan_yetkili=yetkili_user,
-                son_teslim_tarihi=son_teslim_tarihi,
-                durum=GorevDurumu.BASLATILMADI
-            )
-            created_count += 1
-            print(f"Görev oluşturuldu: '{baslik}' -> '{calisan_username}' (Satır {row_index})")
-
-        except IndexError:
-            print(f"HATA: Excel satırında beklenen sütun bulunamadı (Satır {row_index}). Satır atlandı. Lütfen Excel formatını kontrol edin.")
-            failed_count += 1
-            continue
+            atan_yetkili = User.objects.get(id=yetkili_user_id)
+            if not atan_yetkili.is_staff:
+                print(f"HATA: ID {yetkili_user_id} olan kullanıcı yetkili değil.")
+                return
+            print(f"Yetkili kullanıcı bulundu: {atan_yetkili.username}")
+        except User.DoesNotExist:
+            print(f"HATA: Yetkili kullanıcı bulunamadı: ID {yetkili_user_id}")
+            return
+        
+       
+        try:
+            workbook = openpyxl.load_workbook(file_path)
+            sheet = workbook.active
+            print("Excel dosyası başarıyla yüklendi.")
         except Exception as e:
-            print(f"KRİTİK HATA: Satır işlenirken beklenmeyen bir hata oluştu (Satır {row_index}): {e}")
-            failed_count += 1
-            continue
+            print(f"KRİTİK HATA: Excel dosyası okunamadı veya bozuk: {e}")
+            return
 
 
-    try:
+        header = [cell.value for cell in sheet[1]]
+        print(f"Excel başlıkları: {header}")
+
+        COL_USERNAME = 'çalışan kullanıcı adı'
+        COL_BASLIK = 'görev başlığı'
+        COL_ACIKLAMA = 'açıklama'
+        COL_TESLIM_TARIHI = 'son teslim tarihi'
+
+        
+        try:
+            username_idx = header.index(COL_USERNAME)
+            baslik_idx = header.index(COL_BASLIK)
+            aciklama_idx = header.index(COL_ACIKLAMA)
+            teslim_tarihi_idx = header.index(COL_TESLIM_TARIHI)
+            print("Gerekli tüm sütun başlıkları bulundu.")
+        except ValueError as e:
+            print(f"HATA: Excel dosyasında beklenen sütun başlıkları bulunamadı: {e}. Lütfen sütun adlarını kontrol edin: '{COL_USERNAME}', '{COL_BASLIK}', '{COL_ACIKLAMA}', '{COL_TESLIM_TARIHI}'")
+            return
+            
+        gorevler_olusturuldu_sayisi = 0
+
+ 
+        for row_idx, row in enumerate(sheet.iter_rows(min_row=2), start=2): 
+            row_values = [cell.value for cell in row]
+            print(f"İşlenen satır {row_idx}: {row_values}") 
+
+            try:
+                username = row_values[username_idx]
+                baslik = row_values[baslik_idx]
+                aciklama = row_values[aciklama_idx]
+                son_teslim_tarihi_str = row_values[teslim_tarihi_idx]
+                
+                if not username or not baslik or not aciklama:
+                    print(f"UYARI: Satır {row_idx} atlandı: Eksik görev bilgisi (Kullanıcı Adı, Başlık veya Açıklama boş).")
+                    continue
+
+
+                try:
+                    calisan = User.objects.get(username=username, is_staff=False)
+                    print(f"Çalışan bulundu: {calisan.username}")
+                except User.DoesNotExist:
+                    print(f"UYARI: Satır {row_idx} atlandı: '{username}' adında bir çalışan bulunamadı.")
+                    continue
+
+                son_teslim_tarihi = None
+                if son_teslim_tarihi_str:
+                    try:
+
+                        if isinstance(son_teslim_tarihi_str, datetime):
+                            son_teslim_tarihi = son_teslim_tarihi_str.date() 
+                        elif isinstance(son_teslim_tarihi_str, (int, float)): 
+                            son_teslim_tarihi = datetime.fromtimestamp((son_teslim_tarihi_str - 25569) * 86400).date()
+                        else:
+                            
+                            for fmt in ('%Y-%m-%d', '%d.%m.%Y', '%d/%m/%Y'): 
+                                try:
+                                    son_teslim_tarihi = datetime.strptime(str(son_teslim_tarihi_str), fmt).date()
+                                    break
+                                except ValueError:
+                                    pass
+                            if son_teslim_tarihi is None:
+                                print(f"UYARI: Satır {row_idx} için geçersiz son teslim tarihi formatı: '{son_teslim_tarihi_str}'. Bu görev için son teslim tarihi ayarlanmadı.")
+
+                    except Exception as date_err:
+                        print(f"UYARI: Satır {row_idx} için son teslim tarihi dönüştürme hatası: {date_err}. Değer: '{son_teslim_tarihi_str}'")
+                        son_teslim_tarihi = None 
+
+
+                with transaction.atomic(): 
+                    Gorev.objects.create(
+                        atanan_calisan=calisan,
+                        atan_yetkili=atan_yetkili,
+                        baslik=baslik,
+                        aciklama=aciklama,
+                        durum=GorevDurumu.BASLATILMADI,
+                        son_teslim_tarihi=son_teslim_tarihi
+                    )
+                    gorevler_olusturuldu_sayisi += 1
+                    print(f"Başarılı: '{baslik}' görevi '{username}' için oluşturuldu.")
+
+            except Exception as e:
+                print(f"KRİTİK HATA: Satır {row_idx} işlenirken beklenmeyen bir hata oluştu: {e}")
+
+
+        print(f"Celery görevi tamamlandı. Toplam {gorevler_olusturuldu_sayisi} görev oluşturuldu.")
+
+    except Exception as overall_e:
+        print(f"GENEL HATA: Toplu görev atama sırasında genel bir hata oluştu: {overall_e}")
+
+
+    finally:
+
         if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"Geçici dosya silindi: {file_path}")
-        else:
-            print(f"Uyarı: Geçici dosya zaten silinmiş veya bulunamadı: {file_path}")
-    except Exception as e:
-        print(f"HATA: Geçici dosya silinirken hata oluştu: {e}")
-
-    print(f"Celery görevi tamamlandı. Oluşturulan görevler: {created_count}, Başarısız olanlar: {failed_count}")
-    return {'status': 'completed', 'created_tasks': created_count, 'failed_tasks': failed_count}
+            try:
+                os.remove(file_path)
+                print(f"Geçici dosya silindi: {file_path}")
+            except Exception as e:
+                print(f"UYARI: Geçici dosya silinirken hata oluştu: {e}")
