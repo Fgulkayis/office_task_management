@@ -17,6 +17,7 @@ class Gorev(models.Model):
     olusturma_tarihi = models.DateTimeField(auto_now_add=True, verbose_name='Oluşturulma Tarihi')
     baslama_tarihi = models.DateTimeField(null=True, blank=True, verbose_name='Başlama Tarihi')
     tamamlanma_tarihi = models.DateTimeField(null=True, blank=True, verbose_name='Tamamlanma Tarihi')
+    son_teslim_tarihi = models.DateField(null=True, blank=True, verbose_name="Son Teslim Tarihi")
     dosya = models.FileField(upload_to='gorev_dosyalari/', null=True, blank=True, verbose_name="Ek Dosya")
     puan = models.IntegerField(default=0, null=True, verbose_name="Görev Puanı", validators=[MinValueValidator(1), MaxValueValidator(5)])
 
